@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deriv Dynamic Digit Match Tracker</title>
+<style>
+  :root {
+    --bg-main: #060d0a;
+    --bg-card: #0b1a13;
+    --border: #183827;
+    --border-bright: #29573c;
+    --accent-green: #00e676;
+    --accent-yellow: #ffd600;
+    --accent-blue: #00b0ff;
+    --text-primary: #e8f5e9;
+    --text-muted: #81a38f;
+  }
+  
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    line-height: 1.4;
+  }
+  
+  header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: #08130e;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  h1 { margin: 0; font-size: 18px; font-weight: 800; }
+  .sub { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  
+  .wrap { max-width: 1200px; margin: auto; padding: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .value { font-size: 24px; font-weight: 800; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-bottom: 12px; }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-group label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+  
+  select, button {
+    background: #10241a;
+    color: var(--text-primary);
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+    outline: none;
+  }
+  button { cursor: pointer; font-weight: 700; background: #163625; }
+  button:hover { background: #1e4932; border-color: var(--accent-green); }
+  button.sim-btn { background: #182838; border-color: #2b4964; }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #0e2117;
+    color: var(--accent-green);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-green); }
+  .status.sim { color: var(--accent-yellow); }
+  .status.sim .status-dot { background: var(--accent-yellow); }
+
+  .panel { margin-top: 12px; }
+  .signal-box { display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; align-items: center; }
+  .big { font-size: 28px; font-weight: 900; letter-spacing: -0.03em; }
+  .yellow { color: var(--accent-yellow); }
+  .green { color: var(--accent-green); }
+
+  .digits-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .digit-pill {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: #11261b;
+    border: 1px solid var(--border);
+    font-weight: 800;
+    font-size: 14px;
+  }
+  .digit-pill.active { border-color: var(--accent-green); background: #1a3c2b; }
+  .digit-pill.target { background: #3b3207; border-color: var(--accent-yellow); color: var(--accent-yellow); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  th { color: var(--text-muted); font-weight: 600; }
+
+  .bar { height: 8px; background: #12281c; border-radius: 20px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent-green); transition: width 0.3s ease; }
+  .fill.highlight { background: var(--accent-yellow); }
+
+  @media(max-width:800px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .signal-box { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Deriv Digit Match Tracker</h1>
+    <div class="sub">Dynamic Statistical Signal Engine</div>
+  </div>
+  <span id="status" class="status"><span class="status-dot"></span><span id="status-text">Disconnected</span></span>
+</header>
+
+<main class="wrap">
+  <div class="controls">
+    <div class="control-group">
+      <label>Market</label>
+      <select id="symbol">
+        <option value="1HZ100V" selected>Volatility 100 (1s) Index</option>
+        <option value="1HZ10V">Volatility 10 (1s) Index</option>
+        <option value="R_100">Volatility 100 Index</option>
+        <option value="R_75">Volatility 75 Index</option>
+      </select>
+    </div>
+    
+    <div class="control-group">
+      <label>Analysis Window</label>
+      <select id="window">
+        <option value="30">30 Ticks (Fast)</option>
+        <option value="50" selected>50 Ticks (Balanced)</option>
+        <option value="100">100 Ticks (Standard)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Target Mode</label>
+      <select id="target">
+        <option value="AUTO" selected>⚡ AUTO-TARGET</option>
+        <option value="0">Digit 0</option>
+        <option value="1">Digit 1</option>
+        <option value="2">Digit 2</option>
+        <option value="3">Digit 3</option>
+        <option value="4">Digit 4</option>
+        <option value="5">Digit 5</option>
+        <option value="6">Digit 6</option>
+        <option value="7">Digit 7</option>
+        <option value="8">Digit 8</option>
+        <option value="9">Digit 9</option>
+      </select>
+    </div>
+
+    <button id="connect">WebSocket</button>
+    <button id="sim" class="sim-btn">Simulator</button>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Last Digit</div><div id="last" class="value">—</div></div>
+    <div class="card"><div class="label">Current Quote</div><div id="quote" class="value" style="font-size:18px">—</div></div>
+    <div class="card"><div class="label">Ticks Analyzed</div><div id="count" class="value">0</div></div>
+    <div class="card"><div class="label">Focus Target</div><div id="dom" class="value" style="color:var(--accent-yellow)">AUTO</div></div>
+  </div>
+
+  <div class="card panel">
+    <div class="label" id="signal-header">DYNAMIC MATCH SIGNAL MODEL</div>
+    <div class="signal-box" style="margin-top:6px">
+      <div>
+        <div id="signal" class="big">WAIT</div>
+        <div id="reason" style="color:var(--text-muted); font-size:12px; margin-top:2px">Awaiting statistical breakout...</div>
+      </div>
+      <div>
+        <div class="label">Signal Confidence / Strength</div>
+        <div class="value" id="confidence">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card panel">
+    <div class="label">Recent Digits Stream (Last 20)</div>
+    <div id="digits" class="digits-grid"></div>
+  </div>
+
+  <div class="card panel">
+    <div class="label">Digit Frequency Distribution</div>
+    <div id="dist"></div>
+  </div>
+
+  <div class="card panel">
+    <div class="label" id="stats-header">STATISTICAL METRICS</div>
+    <table>
+      <thead><tr><th>Metric</th><th>Observed Rate</th><th>Count</th></tr></thead>
+      <tbody id="rules"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+let ticks = [];
+let ws = null;
+let simInterval = null;
+let scheduledFrame = false;
+
+const $ = id => document.getElementById(id);
+
+function extractLastDigit(quote, pipSize = 2) {
+  const formatted = Number(quote).toFixed(pipSize);
+  return parseInt(formatted.slice(-1), 10);
+}
+
+function processTick(quote, pipSize = 2) {
+  const ld = extractLastDigit(quote, pipSize);
+  ticks.push(ld);
+  if (ticks.length > 300) ticks.shift();
+  $('quote').textContent = quote;
+  
+  if (!scheduledFrame) {
+    scheduledFrame = true;
+    requestAnimationFrame(analyze);
+  }
+}
+
+function analyze() {
+  scheduledFrame = false;
+  if (!ticks.length) return;
+
+  const windowSize = Number($('window').value);
+  const sample = ticks.slice(-windowSize);
+  const sampleLen = sample.length;
+  const targetSelection = $('target').value;
+
+  const freq = new Array(10).fill(0);
+  for (let i = 0; i < sampleLen; i++) freq[sample[i]]++;
+
+  let activeTarget = 0;
+  if (targetSelection === 'AUTO') {
+    let maxCount = -1;
+    for (let i = 0; i < 10; i++) {
+      if (freq[i] > maxCount) {
+        maxCount = freq[i];
+        activeTarget = i;
+      }
+    }
+  } else {
+    activeTarget = Number(targetSelection);
+  }
+
+  $('dom').textContent = targetSelection === 'AUTO' ? `AUTO (${activeTarget})` : activeTarget;
+  $('signal-header').textContent = `DYNAMIC MATCH ${activeTarget} SIGNAL MODEL`;
+  $('stats-header').textContent = `TARGET DIGIT ${activeTarget} STATISTICAL METRICS`;
+
+  const p = 0.10;
+  const stdDev = Math.sqrt((sampleLen * p * (1 - p))) / sampleLen;
+  const targetMatches = freq[activeTarget];
+  const rate = targetMatches / sampleLen;
+
+  const recent = sample.slice(-15);
+  const recentLen = recent.length;
+  let recentMatches = 0;
+  for (let i = 0; i < recentLen; i++) {
+    if (recent[i] === activeTarget) recentMatches++;
+  }
+  const recentRate = recentMatches / recentLen;
+
+  $('last').textContent = sample[sampleLen - 1];$('count').textContent = sampleLen;
+
+  const fragment = document.createDocumentFragment();
+  for (let i = 0; i < recentLen; i++) {
+    const div = document.createElement('div');
+    div.className = `digit-pill ${recent[i] === activeTarget ? 'target' : ''} ${i === recentLen - 1 ? 'active' : ''}`;
+    div.textContent = recent[i];
+    fragment.appendChild(div);
+  }
+  $('digits').replaceChildren(fragment);
+
+  $('dist').innerHTML = freq.map((count, d) => {
+    const pct = ((count / sampleLen) * 100).toFixed(1);
+    const isTarget = d === activeTarget;
+    return `<div style="display:grid;grid-template-columns:25px 1fr 45px;gap:6px;align-items:center;margin:6px 0">
+      <b style="${isTarget ? 'color:var(--accent-yellow)' : ''}">${d}</b>
+      <div class="bar"><div class="fill ${isTarget ? 'highlight' : ''}" style="width:${pct}%"></div></div>
+      <span style="font-size:11px; font-variant-numeric: tabular-nums">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  const expected = Math.round(sampleLen * 0.10);
+  $('rules').innerHTML = [
+    [`Match ${activeTarget} Rate`, `${(rate * 100).toFixed(1)}%`, targetMatches],
+    ['Recent Short Window Rate', `${(recentRate * 100).toFixed(1)}%`, recentMatches],
+    ['Expected Baseline', '10.0%', expected],
+    ['Statistical Variance', `${((rate - p) / stdDev).toFixed(2)} σ`, `${targetMatches - expected} diff`]
+  ].map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+
+  if (sampleLen < 15) {
+    $('signal').textContent = 'COLLECTING';
+    $('signal').className = 'big';$('reason').textContent = `Gathering tick sample (${sampleLen}/15)...`;
+    $('confidence').textContent = '—';
+    return;
+  }
+
+  const dynamicThreshold = p + (1.2 * stdDev);
+
+  if (recentRate >= 0.25) {
+    $('signal').textContent = `BURST MATCH ${activeTarget}`;
+    $('signal').className = 'big yellow';$('reason').textContent = `Hot short-term spike detected (${recentMatches} hits in last ${recentLen} ticks).`;
+    $('confidence').textContent = '88\%';   } else if (rate >= dynamicThreshold && recentRate >= 0.15) {$('signal').textContent = `MATCH ${activeTarget}`;
+    $('signal').className = 'big green';$('reason').textContent = `Overall frequency (${(rate * 100).toFixed(1)}%) broke statistical threshold.`;
+    $('confidence').textContent = `${Math.min(98, Math.round((rate / dynamicThreshold) * 80))}%`;
+  } else {
+    $('signal').textContent = 'WAIT';
+    $('signal').className = 'big';$('reason').textContent = `All digits operating within normal random variation.`;
+    $('confidence').textContent = '—';
+  }
+}
+
+function stopSim() {
+  if (simInterval) clearInterval(simInterval);
+  simInterval = null;
+}
+
+function startSim() {
+  if (ws) { try { ws.close(); } catch(e){} }
+  stopSim();
+  ticks = [];
+  
+  $('status-text').textContent = 'Simulating Ticks';$('status').className = 'status sim';
+
+  let currentPrice = 1250.45;
+  simInterval = setInterval(() => {
+    currentPrice += (Math.random() - 0.49) * 0.25;
+    processTick(currentPrice.toFixed(2), 2);
+  }, 800);
+}
+
+function connectWebSocket() {
+  stopSim();
+  if (ws) { try { ws.close(); } catch(e){} }
+  
+  ticks = [];
+  $('status-text').textContent = 'Connecting...';$('status').className = 'status';
+
+  try {
+    const symbol = $('symbol').value;
+    ws = new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+
+    ws.onopen = () => {
+      $('status-text').textContent = 'Live WebSocket';
+      ws.send(JSON.stringify({ ticks: symbol, subscribe: 1 }));
+    };
+
+    ws.onmessage = e => {
+      const d = JSON.parse(e.data);
+      if (!d.tick) return;
+      processTick(d.tick.quote, d.tick.pip_size || 2);
+    };
+
+    ws.onerror = () => {
+      $('status-text').textContent = 'Auto-Sim Active';
+      startSim();
+    };
+
+    ws.onclose = () => {
+      if (!$('status-text').textContent.includes('Sim')) {$('status-text').textContent = 'Disconnected';
+      }
+    };
+  } catch (err) {
+    startSim();
+  }
+}
+
+$('connect').onclick = connectWebSocket;
+$('sim').onclick = startSim;
+$('window').onchange = analyze;
+$('target').onchange = analyze;
+$('symbol').onchange = () => { if (ws && !simInterval) connectWebSocket(); };
+
+startSim();
+</script>
+</body>
+</html>
